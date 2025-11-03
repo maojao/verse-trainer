@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>2026성경고사 요절 클로즈 트레이너 — 점진적 난이도 (v7)</title>
+<style>
+:root{--bg:#0b0f14;--fg:#e9eef5;--muted:#94a3b8;--acc:#68b5ff;--card:#121825;--input:#0e1420;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--border:#1f2a3a;--pill:#1a2233}
+@media (prefers-color-scheme:light){
+  :root{--bg:#f7fafc;--fg:#0b1220;--muted:#475569;--acc:#2563eb;--card:#ffffff;--input:#f1f5f9;--ok:#16a34a;--warn:#d97706;--err:#dc2626;--border:#e2e8f0;--pill:#eef2f7}
+}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Noto Sans KR,Apple SD Gothic Neo,sans-serif}
+header,main,footer{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:1.6rem;margin:8px 0 4px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 16px}
+button{background:var(--pill);color:var(--fg);border:1px solid var(--border);padding:8px 12px;border-radius:10px;cursor:pointer}
+button:hover{border-color:var(--acc)}
+select,input,textarea{background:var(--input);color:var(--fg);border:1px solid var(--border);padding:8px 10px;border-radius:10px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
+.row{display:flex;gap:12px;flex-wrap:wrap}.col{flex:1 1 320px}
+small.muted{color:var(--muted)} hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+.kbd{background:var(--pill);border:1px solid var(--border);padding:2px 6px;border-radius:6px;color:var(--muted)}
+.badge{display:inline-block;background:var(--pill);border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:.8rem;color:var(--muted)}
+.p{margin:6px 0}.ok{color:var(--ok)}.warn{color:var(--warn)}.err{color:var(--err)}
+.cloze{white-space:pre-wrap;font-size:1.12rem}
+.flex-between{display:flex;justify-content:space-between;align-items:center}
+.hidden{display:none}
+.blank{min-width:120px;display:inline-block}
+.blank input{width:100%;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--input);color:var(--fg);text-align:center}
+.hints{color:var(--muted);font-size:.9rem}
+.code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;background:var(--pill);padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
+.refWrap{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.refField{display:flex;align-items:center;gap:6px}
+.refField input{width:100px}
+.nextBtn{margin-top:8px}
+</style>
+</head>
+<body>
+<header class="flex-between">
+  <div>
+    <h1>2026 성경고사 요절 트레이너</h1>
+    <small class="muted">점진적 난이도(레벨) 적용 · 장절 암기</small>
+  </div>
+  <div>
+    <span class="badge" id="stats">카드 0</span>
+    <span class="badge" id="stat2">정답 0 · 오답 0</span>
+  </div>
+</header>
+
+<main>
+  <section class="toolbar">
+    <button id="startBtn">학습 시작</button>
+    <button id="stopBtn" class="hidden">그만하기</button>
+    <button id="listBtn">카드 목록</button>
+    <button id="exportBtn">백업(JSON)</button>
+    <button id="resetBtn">전체 초기화</button>
+  </section>
+
+  <section id="study" class="card hidden">
+    <div class="flex-between">
+      <div>
+        <strong>장절:</strong> <span id="refView" class="code"></span>
+        <span class="badge" id="weightInfo"></span>
+        <span class="badge" id="modeBadge"></span>
+      </div>
+      <div><small class="muted">모드: <span id="modeLabel">타이핑</span></small></div>
+    </div>
+
+    <div id="refQuizArea" class="p hidden">
+      <div class="refWrap">
+        <div class="refField" id="bookField"><small class="muted">성경</small><span id="bookFixed" class="code hidden"></span><input type="text" id="bookInput" class="hidden" placeholder="예: 시"/></div>
+        <div class="refField" id="chapField"><small class="muted">장</small><span id="chapFixed" class="code hidden"></span><input type="text" id="chapInput" class="hidden" placeholder="예: 23"/></div>
+        <div class="refField" id="verseField"><small class="muted">절</small><span id="verseFixed" class="code hidden"></span><input type="text" id="verseInput" class="hidden" placeholder="예: 1 또는 24-25"/></div>
+      </div>
+    </div>
+
+    <div class="cloze" id="clozeHost"></div>
+
+    <div id="typingArea" class="p">
+      <div class="hints">힌트: <button id="hintFirst">H(첫글자)</button> <button id="hintLen">L(길이)</button> <button id="hintReveal">R(랜덤 공개)</button> · <button id="switchSelf">셀프 모드</button> · <button id="showAnswerQuick">정답 보기</button></div>
+      <div class="p"><button id="submitBtn">채점(Enter)</button> <button id="nextBtn" class="nextBtn hidden">다음(Enter)</button></div>
+      <div id="result" class="p"></div>
+    </div>
+
+    <div id="selfArea" class="p hidden">
+      <button id="showAnswer">정답 보기</button>
+      <div id="fullAnswer" class="p hidden"></div>
+      <div class="p">
+        <label>셀프 채점(5~1): <input type="number" min="1" max="5" value="3" id="selfScore"></label>
+        <button id="selfSubmit">기록</button>
+        <button id="switchTyping">타이핑 모드</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="list" class="card hidden">
+    <h3>카드 목록</h3>
+    <div id="cardList"></div>
+  </section>
+</main>
+
+<footer>
+  <small class="muted">저장: localStorage (cards/progress/stats) · 오프라인 가능</small>
+</footer>
+
+<script>
+/* ===== 키 & 상수 ===== */
+const KEY_CARDS="bct.cards.v1";
+const KEY_SRS="bct.srs.v1";
+const KEY_STATS="bct.stats.v1";
+
+const REF_QUIZ_RATE = 0.30;
+// const TEXT_MASK_RATIO_NORMAL = 0.30; // ⭐️ 사용 안함
+const TEXT_MASK_RATIO_WHEN_REF = 0.10;
+
+// ⭐️ 점진적 난이도 레벨 (괄호 비율)
+const MASK_LEVELS = [0.15, 0.30, 0.45, 0.60]; // 0~3 레벨 (총 4단계)
+const MAX_LEVEL = MASK_LEVELS.length - 1; // 최고 레벨 = 3
+
+/* ===== 기본 카드 ===== */
+function defaultCards(){ return [
+  {ref:"민14:9", text:"다만 여호와를 거역하지는 말라 또 그 땅 백성을 두려워하지 말라 그들은 우리의 먹이라 그들의 보호자는 그들에게서 떠났고 여호와는 우리와 함께 하시느니라 그들을 두려워하지 말라 하나"},
+  {ref:"신7:9", text:"그런즉 너는 알라 오직 네 하나님 여호와는 하나님이시요 신실하신 하나님이시라 그를 사랑하고 그의 계명을 지키는 자에게는 천 대까지 그의 언약을 이행하시며 인애를 베푸시되"},
+  {ref:"수1:9", text:"내가 네게 명령한 것이 아니냐 강하고 담대하라 두려워하지 말며 놀라지 말라 네가 어디로 가든지 네 하나님 여호와가 너와 함께 하느니라 하시니라"},
+  {ref:"시8:1", text:"여호와 우리 주여 주의 이름이 온 땅에 어찌 그리 아름다운지요 주의 영광이 하늘을 덮었나이다."},
+  {ref:"시23:1", text:"여호와는 나의 목자시니 내게 부족함이 없으리로다."},
+  {ref:"시25:6", text:"여호와여 주의 긍휼하심과 인자하심이 영원부터 있었사오니 주여 이것들을 기억하옵소서"},
+  {ref:"시34:8", text:"너희는 여호와의 선하심을 맛보아 알지어다 그에게 피하는 자는 복이 있도다."},
+  {ref:"시37:4", text:"또 여호와를 기뻐하라 그가 네 마음의 소원을 네게 이루어 주시리로다"},
+  {ref:"시42:5", text:"내 영혼아 네가 어찌하여 낙심하며 어찌하여 내 속에서 불안해 하는가 너는 하나님께 소망을 두라 그가 나타나 도우심으로 말미암아 내가 여전히 찬송하리로다"},
+  {ref:"시51:10", text:"하나님이여 내 속에 정한 마음을 창조하시고 내 안에 정직한 영을 새롭게 하소서"},
+  {ref:"시91:4", text:"그가 너를 그의 깃으로 덮으시리니 네가 그의 날개 아래에 피하리로다 그의 진실함은 방패와 손 방패가 되시나니"},
+  {ref:"시133:1", text:"보라 형제가 연합하여 동거함이 어찌 그리 선하고 아름다운고"},
+  {ref:"시136:26", text:"하늘의 하나님께 감사하라 그 인자하심이 영원함이로다"},
+  {ref:"시145:17", text:"여호와께서는 그 모든 행위에 의로우시며 그 모든 일에 은혜로우시도다"},
+  {ref:"잠11:1", text:"속이는 저울은 여호와께서 미워하시나 공평한 추는 그가 기뻐하시느니라"},
+  {ref:"잠25:28", text:"자기의 마음을 제어하지 아니하는 자는 성읍이 무너지고 성벽이 없는 것과 같으니라"},
+  {ref:"마5:8", text:"마음이 청결한 자는 복이 있나니 그들이 하나님을 볼 것임이요."},
+  {ref:"마7:15", text:"거짓 선지자들을 삼가라 양의 옷을 입고 너희에게 나아오나 속에는 노략질하는 이리라"},
+  {ref:"마11:25", text:"그 때에 예수께서 대답하여 이르시되 천지의 주재이신 아버지여 이것을 지혜롭고 슬기 있는 자들에게는 숨기시고 어린 아이들에게는 나타내심을 감사하나이다"},
+  {ref:"마11:29", text:"나는 마음이 온유하고 겸손하니 나의 멍에를 메고 내게 배우라 그리하면 너희 마음이 쉼을 얻으리니"},
+  {ref:"눅6:36", text:"너희 아버지의 자비로우심 같이 너희도 자비로운 자가 되라"},
+  {ref:"요12:24", text:"내가 진실로 진실로 너희에게 이르노니 한 알의 밀이 땅에 떨어져 죽지 아니하면 한 알 그대로 있고 죽으면 많은 열매를 맺느니라"},
+  {ref:"행4:35", text:"사도들의 발 앞에 두매 그들이 각 사람의 필요를 따라 나누어 줌이라"},
+  {ref:"행10:2", text:"그가 경건하여 온 집안과 더불어 하나님을 경외하며 백성을 많이 구제하고 하나님께 항상 기도하더니."},
+  {ref:"롬12:15", text:"즐거워하는 자들과 함께 즐거워하고 우는 자들과 함께 울라"},
+  {ref:"롬12:18", text:"할 수 있거든 너희로서는 모든 사람과 더불어 화목하라"},
+  {ref:"롬14:1", text:"믿음이 연약한 자를 너희가 받되 그의 의견을 비판하지 말라"},
+  {ref:"고전4:2", text:"그리고 맡은 자들에게 구할 것은 충성이니라"},
+  {ref:"고전9:23", text:"내가 복음을 위하여 모든 것을 행함은 복음에 참여하고자 함이라"},
+  {ref:"고전10:31", text:"그런즉 너희가 먹든지 마시든지 무엇을 하든지 다 하나님의 영광을 위하여 하라."},
+  {ref:"고전14:40", text:"모든 것을 품위 있게 하고 질서 있게 하라"},
+  {ref:"고전15:57", text:"우리 주 예수 그리스도로 말미암아 우리에게 승리를 주시는 하나님께 감사하노니"},
+  {ref:"고후1:4", text:"우리의 모든 환난 중에서 우리를 위로하사 우리로 하여금 하나님께 받는 위로로써 모든 환난 중에 있는 자들을 능히 위로하게 하시는 이시로다"},
+  {ref:"엡2:19", text:"그러므로 이제부터 너희는 외인도 아니요 나그네도 아니요 오직 성도들과 동일한 시민이요 하나님의 권속이라"},
+  {ref:"빌1:10", text:"너희로 지극히 선한 것을 분별하며 또 진실하여 허물 없이 그리스도의 날까지 이르고"},
+  {ref:"빌1:18", text:"그러면 무엇이냐 겉치레로 하나 참으로 하나 무슨 방도로 하든지 전파되는 것은 그리스도니 이로써 나는 기뻐하고 또한 기뻐하리라."},
+  {ref:"빌2:3", text:"아무 일에든지 다툼이나 허영으로 하지 말고 오직 겸손한 마음으로 각각 자기보다 남을 낫게 여기고"},
+  {ref:"빌2:8", text:"사람의 모양으로 나타나사 자기를 낮추시고 죽기까지 복종하셨으니 곧 십자가에 죽으심이라"},
+  {ref:"빌4:8", text:"끝으로 형제들아 무엇에든지 참되며 무엇에든지 경건하며 무엇에든지 옳으며 무엇에든지 정결하며 무엇에든지 사랑 받을 만하며 무엇에든지 칭찬 받을 만하며 무슨 덕이 있든지 무슨 기림이 있든지 이것들을 생각하라"},
+  {ref:"빌4:13", text:"내게 능력 주시는 자 안에서 내가 모든 것을 할 수 있느라"},
+  {ref:"골3:13", text:"누가 누구에게 불만이 있거든 서로 용납하여 피차 용서하되 주께서 너희를 용서하신 것 같이 너희도 그리하고"},
+  {ref:"골3:22", text:"종들아 모든 일에 육신의 상전들에게 순종하되 사람을 기쁘게 하는 자와 같이 눈가림만 하지 말고 오직 주를 두려워하여 성실한 마음으로 하라"},
+  {ref:"딤전6:8", text:"우리가 먹을 것과 입을 것이 있은즉 족한 줄로 알 것이니라."},
+  {ref:"딤후4:2", text:"너는 말씀을 전파하라 때를 얻든지 못 얻든지 항상 힘쓰라 범사에 오래 참음과 가르침으로 경책하며 경계하며 권하라"},
+  {ref:"딛2:7", text:"범사에 네 자신이 선한 일의 본을 보이며 교훈에 부패하지 아니함과 단정함과"},
+  {ref:"히10:24-25", text:"서로 돌아보아 사랑과 선행을 격려하며 모이기를 폐하는 어떤 사람들의 습관과 같이 하지 말고 오직 권하여 그 날이 가까움을 볼수록 더욱 그리하자."},
+  {ref:"히13:2", text:"손님 대접하기를 잊지 말라 이로써 부지중에 천사들을 대접한 이들이 있었느니라"},
+  {ref:"히13:8", text:"예수 그리스도는 어제나 오늘이나 영원토록 동일하시니라"},
+  {ref:"약1:5", text:"너희 중에 누구든지 지혜가 부족하거든 모든 사람에게 후히 주시고 꾸짖지 아니하시는 하나님께 구하라 그리하면 주시리라"},
+  {ref:"약1:19", text:"내 사랑하는 형제들아 너희가 알지니 사람마다 듣기는 속히 하고 말하기는 더디 하며 성내기도 더디 하라"},
+  {ref:"벧전1:16", text:"기록되었으되 내가 거룩하니 너희도 거룩할지어다 하셨느니라."},
+  {ref:"벧전2:17", text:"뭇 사람을 공경하며 형제를 사랑하며 하나님을 두려워하며 왕을 존대하라"},
+  {ref:"벧후1:4", text:"이로써 그 보배롭고 지극히 큰 약속을 우리에게 주사 이 약속으로 말미암아 너희가 정욕 때문에 세상에서 썩어질 것을 피하여 신성한 성품에 참여하는 자가 되게 하려 하셨느니라."},
+  {ref:"벧후3:9", text:"주의 약속은 어떤 이들이 더디다고 생각하는 것 같이 더딘 것이 아니라 오직 주께서는 너희를 대하여 오래 참으사 아무도 멸망하지 아니하고 다 회개하기에 이르기를 원하시느니라"},
+  {ref:"요일4:16", text:"하나님이 우리를 사랑하시는 사랑을 우리가 알고 믿었노니 하나님은 사랑이시라 사랑 안에 거하는 자는 하나님 안에 거하고 하나님도 그의 안에 거하시느니라"}
+];}
+
+/* ===== 저장 ===== */
+function load(key, def){ try{ const r=localStorage.getItem(key); return r?JSON.parse(r):def; }catch(e){return def}}
+function save(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+
+let CARDS = load(KEY_CARDS, null); if(!CARDS){ CARDS=defaultCards(); save(KEY_CARDS, CARDS); }
+let SRS   = load(KEY_SRS, {});
+let STATS = load(KEY_STATS, {});
+
+function today(){ return new Date().toISOString().slice(0,10); }
+function normalize(s){ return (s||"").replace(/\s+/g,"").replace(/[^\w가-힣:0-9\-]/g,"").toLowerCase(); }
+function updateHeader(){
+  document.getElementById("stats").textContent = `카드 ${CARDS.length}`;
+  let c=0,w=0; Object.values(STATS).forEach(s=>{ c+=s.correct||0; w+=s.wrong||0; });
+  document.getElementById("stat2").textContent = `정답 ${c} · 오답 ${w}`;
+}
+updateHeader();
+
+// ⭐️ [요청 2] 오답 하이라이트를 위한 구절 재구성 헬퍼
+function reconstructVerse(maskedText, correctAnswers, inputElements) {
+  let html = "";
+  const tempDiv = document.createElement("div"); // XSS 방지를 위해
+  const parts = maskedText.split("(　　　)");
+  
+  parts.forEach((seg, i) => {
+    tempDiv.textContent = seg;
+    html += tempDiv.innerHTML; // 텍스트를 HTML-safe하게 추가
+    
+    if (i < correctAnswers.length) {
+      const expected = correctAnswers[i];
+      const actual = inputElements[i] ? inputElements[i].value.trim() : "";
+      const isOk = normalize(expected) === normalize(actual); // 'normalize'는 전역에 정의됨
+      
+      tempDiv.textContent = expected;
+      const safeExpected = tempDiv.innerHTML;
+      tempDiv.textContent = actual;
+      const safeActual = tempDiv.innerHTML;
+
+      if (isOk) {
+        // 맞은 답
+        html += `<span class="ok" style="font-weight:bold; color:var(--ok);">${safeExpected}</span>`;
+      } else {
+        // 틀린 답
+        html += `<span class="err" title="입력: ${safeActual || '없음'}" style="font-weight:bold; color:var(--err); text-decoration: underline; text-decoration-color: var(--err);">${safeExpected}</span>`;
+      }
+    }
+  });
+  return html;
+}
+
+
+/* ===== 클로즈 생성 ===== */
+const STOP = new Set(["든지","은","는","이","가","을","를","에","에서","에게","의","과","와","도","만","으로","로","께","보다","까지","부터","이나","나","라","다","함","것","수","하다","있다","없다","같다","했다","하며","하고","되다","했다가","한다"]);
+function tokenize(s){ return s.trim().split(/\s+/); }
+function extractManual(text){ const answers=[],parts=[]; let i=0; while(i<text.length){ const s=text.indexOf("{{",i); if(s<0){ parts.push(text.slice(i)); break;} parts.push(text.slice(i,s)); const e=text.indexOf("}}",s+2); if(e<0){ parts.push(text.slice(s)); break;} const ans=text.slice(s+2,e); answers.push(ans); parts.push("(　　　)"); i=e+2;} return {masked:parts.join(""), answers}; }
+function autoMask(text, ratio=0.3, minLen=2){
+  const toks=tokenize(text), elig=[];
+  toks.forEach((tok,idx)=>{ const clean=tok.replace(/[^\w가-힣]/g,""); if(clean.length<minLen) return; if(STOP.has(clean)) return; if(/^\d+$/.test(clean)) return; const kor=(clean.match(/[가-힣]/g)||[]).length; const score=kor*2+clean.length; elig.push({score,idx}); });
+  if(!elig.length) return {masked:text,answers:[]};
+  elig.sort((a,b)=>b.score-a.score);
+  const count=Math.max(1,Math.round(toks.length*ratio));
+  const pick=elig.slice(0,count).map(o=>o.idx).sort((a,b)=>a-b);
+  const answers=[]; const out=toks.map((t,i)=> pick.includes(i)?(answers.push(t.replace(/[^\w가-힣]/g,"")),"(　　　)"):t );
+  return {masked:out.join(" "), answers};
+}
+function makeCloze(text, ratio){ return (text.includes("{{")&&text.includes("}}"))?extractManual(text):autoMask(text, ratio, 2); }
+
+/* ===== 가중치 랜덤 (⭐️ 수정됨) ===== */
+const BETA=0.7;
+function weightOf(ref){ const s=STATS[ref]||{correct:0}; return Math.max(0.05, 1/Math.pow(1+(s.correct||0), BETA)); }
+
+// ⭐️ 수정된 함수: due 날짜를 확인
+function pickWeighted(){
+  const now = today();
+
+  // 1. 복습일이 도래한(due) 카드만 필터링
+  const dueCards = CARDS.filter(c => {
+    const srs = SRS[c.ref];
+    // 새 카드(srs 정보 없음) 또는 복습일이 오늘/과거인 카드
+    if (!srs || !srs.due) return true; 
+    return srs.due <= now;
+  });
+
+  // 2. 공부할 카드가 없으면, 전체 카드 풀에서 하나 선택 (복습)
+  //    공부할 카드가 있으면, 'dueCards' 풀에서 선택
+  const pool = dueCards.length > 0 ? dueCards : CARDS;
+
+  // 3. 선택된 풀(pool) 안에서 기존의 가중치 랜덤 로직 실행
+  const w = pool.map(c => weightOf(c.ref)), sum=w.reduce((a,b)=>a+b,0);
+  let r=Math.random()*sum;
+  for(let i=0;i<pool.length;i++){
+    r-=w[i];
+    if(r<=0) return {card:pool[i], weight:w[i]};
+  }
+  return {card:pool[pool.length-1], weight:w[w.length-1]};
+}
+
+/* ===== 참조 파싱 ===== */
+function parseRef(ref){ const m=ref.match(/^([^\d:]+)(\d+):(.+)$/); if(!m) return {book:ref, chap:"", verse:""}; return {book:m[1], chap:String(m[2]), verse:m[3]}; }
+function normalizeRef(s){ return normalize(s); }
+
+/* ===== UI ===== */
+const elStudy=document.getElementById("study");
+const elList=document.getElementById("list");
+const elRefView=document.getElementById("refView");
+const elWeightInfo=document.getElementById("weightInfo");
+const elModeBadge=document.getElementById("modeBadge");
+const elModeLabel=document.getElementById("modeLabel");
+const elClozeHost=document.getElementById("clozeHost");
+const elResult=document.getElementById("result");
+
+const elRefQuizArea=document.getElementById("refQuizArea");
+const elBookFixed=document.getElementById("bookFixed");
+const elChapFixed=document.getElementById("chapFixed");
+const elVerseFixed=document.getElementById("verseFixed");
+const elBookInput=document.getElementById("bookInput");
+const elChapInput=document.getElementById("chapInput");
+const elVerseInput=document.getElementById("verseInput");
+
+const elNextBtn=document.getElementById("nextBtn");
+
+function show(section){ [elStudy, elList].forEach(s=>s.classList.add("hidden")); if(section) section.classList.remove("hidden"); }
+
+/* ===== 상태 ===== */
+let running=false;
+let current=null;
+let hintUsed=false;
+let waitingNext=false;
+
+/* ===== 보조 ===== */
+function advanceNext(){
+  if(waitingNext){
+    waitingNext=false;
+    elNextBtn.classList.add("hidden");
+    nextCard();
+  }
+}
+
+/* ===== 레퍼런스 입력 네비 ===== */
+function refFieldsMaskedOrder() {
+  const order = [];
+  if (current && current.refMask) {
+    if (current.refMask.book) order.push(elBookInput);
+    if (current.refMask.chap) order.push(elChapInput);
+    if (current.refMask.verse) order.push(elVerseInput);
+  }
+  return order;
+}
+function focusFirstClozeOrGrade() {
+  if (current && current.inputs && current.inputs[0]) current.inputs[0].focus();
+  else gradeTyping();
+}
+function handleRefEnter(e, which) {
+  if (waitingNext && e.key==="Enter") { e.preventDefault(); advanceNext(); return; }
+  if (!current || !current.refQuiz) return;
+  const masked = refFieldsMaskedOrder();
+  if (masked.length === 0) { e.preventDefault(); focusFirstClozeOrGrade(); return; }
+  const idx = masked.indexOf(which);
+  if (idx === -1) { e.preventDefault(); focusFirstClozeOrGrade(); return; }
+  if (idx < masked.length - 1) masked[idx+1].focus();
+  else focusFirstClozeOrGrade();
+  e.preventDefault();
+}
+[elBookInput, elChapInput, elVerseInput].forEach((inp)=>{
+  inp.addEventListener("keydown", (e)=>{ if (e.key === "Enter") handleRefEnter(e, e.target); });
+});
+
+/* ===== 렌더/네비 ===== */
+function renderCloze(masked, answers){
+  elClozeHost.innerHTML=""; const parts=masked.split("(　　　)"); const inputs=[];
+  parts.forEach((seg,i)=>{
+    elClozeHost.appendChild(document.createTextNode(seg));
+    if(i<answers.length){
+      const span=document.createElement("span"); span.className="blank";
+      const inp=document.createElement("input"); inp.type="text"; inp.setAttribute("data-idx",i);
+      span.appendChild(inp); elClozeHost.appendChild(span); inputs.push(inp);
+      inp.addEventListener("keydown",(e)=>{
+        if (waitingNext && e.key==="Enter"){ e.preventDefault(); advanceNext(); return; }
+        if(e.key==="Enter"){
+          if(i<inputs.length-1) inputs[i+1].focus(); else gradeTyping();
+        }
+        if(e.key==="ArrowRight"&&i<inputs.length-1){inputs[i+1].focus();}
+        if(e.key==="ArrowLeft"&&i>0){inputs[i-1].focus();}
+      });
+    }
+  });
+  if(inputs[0]) inputs[0].focus(); return inputs;
+}
+function maskRefFields(ans){
+  const fields=["book","chap","verse"];
+  const k = Math.floor(Math.random()*3)+1;
+  const pick=[...fields].sort(()=>Math.random()-0.5).slice(0,k);
+  const mask={book:false,chap:false,verse:false}; pick.forEach(f=>mask[f]=true); return mask;
+}
+function setRefUI(mask, ans){
+  function setField(masked, fixedEl, inputEl, val){
+    if(masked){ fixedEl.classList.add("hidden"); inputEl.classList.remove("hidden"); inputEl.value=""; }
+    else{ fixedEl.textContent = val; fixedEl.classList.remove("hidden"); inputEl.classList.add("hidden"); }
+  }
+  setField(mask.book, elBookFixed, elBookInput, ans.book);
+  setField(mask.chap, elChapFixed, elChapInput, ans.chap);
+  setField(mask.verse, elVerseFixed, elVerseInput, ans.verse);
+}
+function focusFirstMaskedRef(mask) {
+  try {
+    if (mask && mask.book) { elBookInput.focus(); return true; }
+    if (mask && mask.chap) { elChapInput.focus(); return true; }
+    if (mask && mask.verse) { elVerseInput.focus(); return true; }
+  } catch(e){}
+  return false;
+}
+
+/* ===== 세션 (⭐️ 수정됨) ===== */
+function startStudy(){
+  running=true;
+  document.getElementById("startBtn").classList.add("hidden");
+  document.getElementById("stopBtn").classList.remove("hidden");
+  nextCard();
+  show(elStudy);
+}
+function stopStudy(){
+  running=false;
+  document.getElementById("stopBtn").classList.add("hidden");
+  document.getElementById("startBtn").classList.remove("hidden");
+  show(null);
+}
+
+// ⭐️ 수정된 함수: 레벨 기반 괄호 비율 적용
+function nextCard(){
+  if(!running) return;
+  waitingNext=false; elNextBtn.classList.add("hidden");
+
+  const pick=pickWeighted(); const card=pick.card;
+
+  // 1. 카드의 SRS 데이터를 가져와 현재 레벨 확인
+  //    (level 속성이 없으면 0으로 초기화)
+  const srsData = SRS[card.ref] || { level: 0, ef: 2.5, interval: 0, due: today() };
+  if (typeof srsData.level === 'undefined') srsData.level = 0;
+  const currentLevel = srsData.level;
+
+  // 2. 레벨에 맞는 괄호 비율(maskRatio) 설정
+  const maskRatio = MASK_LEVELS[Math.min(currentLevel, MAX_LEVEL)];
+
+  const refQuiz = Math.random() < REF_QUIZ_RATE;
+  // 3. 본문 퀴즈일 때만 레벨별 괄호 비율(maskRatio)을 적용
+  const ratio = refQuiz ? TEXT_MASK_RATIO_WHEN_REF : maskRatio;
+  
+  const {masked, answers} = makeCloze(card.text, ratio);
+  current = {card, answers, masked, inputs:[], refQuiz, refMask:null, refAns:parseRef(card.ref)};
+
+  elModeBadge.textContent = refQuiz ? "장절 암기" : "본문 암기";
+  elModeLabel.textContent="타이핑";
+  // 4. UI에 현재 레벨 표시
+  elWeightInfo.textContent = `가중치 ${pick.weight.toFixed(3)} | 레벨 ${currentLevel}`;
+
+  elResult.innerHTML="";
+  document.getElementById("refView").textContent = refQuiz ? "???" : card.ref;
+
+  if(refQuiz){
+    elRefQuizArea.classList.remove("hidden");
+    current.refMask = maskRefFields(current.refAns);
+    setRefUI(current.refMask, current.refAns);
+  }else{
+    elRefQuizArea.classList.add("hidden");
+  }
+
+  current.inputs = renderCloze(masked, answers);
+
+  setTimeout(()=>{
+    try{
+      let focused=false;
+      if(current && current.refQuiz){ focused = focusFirstMaskedRef(current.refMask); }
+      if(!focused && current && current.inputs && current.inputs[0]){ current.inputs[0].focus(); focused=true; }
+      if(!focused){ const sb=document.getElementById("submitBtn"); if(sb) sb.focus(); }
+    }catch(e){}
+  }, 0);
+}
+
+/* ===== 통계/SRS ===== */
+function recordStat(ref, ok){ const s=STATS[ref]||{seen:0,correct:0,wrong:0,last:null}; s.seen++; ok?s.correct++:s.wrong++; s.last=today(); STATS[ref]=s; save(KEY_STATS,STATS); updateHeader(); }
+
+// ⭐️ [요청 1] 수정된 SRS 알고리즘
+// E-Factor 계산은 항상 수행하고, q 값에 따라 interval과 due 날짜만 다르게 설정
+function srsUpdateLight(srsData, q){
+  if (typeof srsData.level === 'undefined') srsData.level = 0; // 안전장치
+
+  // 1. E-Factor(학습 용이도) 갱신 (SM-2 알고리즘 공식)
+  // q=3일 때 (0.1 - 2*...) = -0.064
+  // q=3일 때는 EF가 0이 됨. (0.1 - (5-3)*(0.08+(5-3)*0.02)) = 0.1 - 2*(0.08+0.04) = 0.1 - 2*0.12 = 0.1 - 0.24 = -0.14
+  // 공식 수정: (srsData.ef||2.5) + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+  srsData.ef = (srsData.ef || 2.5) + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+  if (srsData.ef < 1.3) srsData.ef = 1.3; // 최소 EF는 1.3
+
+  // 2. 복습 간격(Interval) 및 다음 복습일(Due) 갱신
+  if (q < 4) {
+    // q=2 (오답) 또는 q=3 (부분 정답/레벨업)
+    // 학습 간격을 0으로 리셋하고, 오늘 바로 다시 복습
+    srsData.interval = 0;
+    srsData.due = today();
+  } else {
+    // q=4, 5 (마스터)
+    // 다음 복습 간격 계산
+    if (!srsData.interval || srsData.interval === 0) srsData.interval = 1;
+    else if (srsData.interval === 1) srsData.interval = 3;
+    else srsData.interval = Math.round(srsData.interval * srsData.ef);
+
+    const d = new Date();
+    d.setDate(d.getDate() + srsData.interval);
+    srsData.due = d.toISOString().slice(0, 10);
+  }
+  // srsData가 직접 수정됨
+}
+
+/* ===== 채점 (⭐️ 수정됨) ===== */
+// ⭐️ [요청 2] 오답 표시 로직이 개선된 채점 함수
+function gradeTyping(){
+  if(!current) return;
+
+  // --- 1. 본문 및 장절 채점 ---
+  const parts = current.inputs.map(inp => inp.value.trim());
+  let ok = 0;
+  current.answers.forEach((a, i) => { if(normalize(a) === normalize(parts[i])) ok++; });
+
+  let refOk = true;
+  if(current.refQuiz){
+    const needBook=current.refMask.book, needChap=current.refMask.chap, needVerse=current.refMask.verse;
+    const ub=elBookInput.value.trim(), uc=elChapInput.value.trim(), uv=elVerseInput.value.trim();
+    const ans=current.refAns;
+    if(needBook){ const okb=normalizeRef(ub)===normalizeRef(ans.book); refOk = refOk && okb; }
+    if(needChap){ const okc=normalizeRef(uc)===normalizeRef(ans.chap); refOk = refOk && okc; }
+    if(needVerse){ const okv=normalizeRef(uv)===normalizeRef(ans.verse); refOk = refOk && okv; }
+  }
+
+  const fullCorrect = (ok === current.answers.length) && (!current.refQuiz || refOk);
+  let html = ""; // 결과 HTML
+  const cls = fullCorrect ? "ok" : ((ok > 0 || (current.refQuiz && refOk)) ? "warn" : "err");
+
+  // ⭐️ [요청 2] 개선된 오답 표시
+  if (fullCorrect) {
+    html = `<div>본문 정답 ${ok}/${current.answers.length}`;
+    if (current.refQuiz) html += ` · 장절 ⭕`;
+    html += `</div>`;
+  } else {
+    // --- 1. 장절 결과 (요청대로 순서 변경: 장절 먼저) ---
+    html = `<div class="p"><strong>[장절]</strong><br>`;
+    const tempDiv = document.createElement("div"); // XSS 방지
+    
+    if (current.refQuiz) {
+      const ub=elBookInput.value.trim(), uc=elChapInput.value.trim(), uv=elVerseInput.value.trim();
+      const ans=current.refAns;
+      
+      if (current.refMask.book) {
+        const okb = normalizeRef(ub) === normalizeRef(ans.book);
+        tempDiv.textContent = ub; const safeUb = tempDiv.innerHTML;
+        html += `성경: ${okb ? `<span class="ok">${ans.book}</span>` : `<span class="err" title="입력: ${safeUb||'없음'}">${ans.book}</span>`}<br>`;
+      }
+      if (current.refMask.chap) {
+        const okc = normalizeRef(uc) === normalizeRef(ans.chap);
+        tempDiv.textContent = uc; const safeUc = tempDiv.innerHTML;
+        html += `장: ${okc ? `<span class="ok">${ans.chap}</span>` : `<span class="err" title="입력: ${safeUc||'없음'}">${ans.chap}</span>`}<br>`;
+      }
+      if (current.refMask.verse) {
+        const okv = normalizeRef(uv) === normalizeRef(ans.verse);
+        tempDiv.textContent = uv; const safeUv = tempDiv.innerHTML;
+        html += `절: ${okv ? `<span class="ok">${ans.verse}</span>` : `<span class="err" title="입력: ${safeUv||'없음'}">${ans.verse}</span>`}`;
+      }
+    } else {
+      html += `<span class="muted">${current.card.ref} (퀴즈 아님)</span>`;
+    }
+    html += `</div><hr>`;
+
+    // --- 2. 본문 결과 (요청대로 하이라이트 방식 적용) ---
+    html += `<div class="p"><strong>[본문 정답]</strong> (총 ${current.answers.length}개 중 ${ok}개 정답)<br>`;
+    html += `<div class="cloze" style="white-space:pre-wrap; font-size: 1.0rem; line-height: 1.6;">`;
+    // 'reconstructVerse' 헬퍼 함수 호출 (이 함수는 스크립트 상단에 정의됨)
+    html += reconstructVerse(current.masked, current.answers, current.inputs);
+    html += `</div></div>`;
+  }
+  
+  // --- 2. 통계 및 레벨/SRS 로직 (⭐️ 수정된 부분) ---
+  recordStat(current.card.ref, fullCorrect);
+
+  const srsKey = current.card.ref;
+  const srsData = SRS[srsKey] || { level: 0, ef: 2.5, interval: 0, due: today() };
+  if (typeof srsData.level === 'undefined') srsData.level = 0; // 안전장치
+
+  let resultMsg = "";
+  let q = 0; // SRS에 전달할 점수(quality)
+
+  if (fullCorrect) {
+    const currentLevel = srsData.level;
+    if (currentLevel < MAX_LEVEL) {
+      srsData.level = currentLevel + 1;
+      q = 3; // '보통' 점수 (복습 간격 0으로 리셋됨)
+      resultMsg = `<br><span class="ok">🎉 레벨 상승! (Level ${srsData.level})</span>`;
+    } else {
+      // 최고 레벨 도달
+      q = hintUsed ? 4 : 5; // '높은' 점수 (복습 간격 늘어남)
+      resultMsg = `<br><span class="ok">✨ 마스터! (다음 복습일이 갱신됩니다)</span>`;
+    }
+  } else {
+    // --- 3. 오답 ---
+    if (srsData.level > 0) {
+      srsData.level = srsData.level - 1;
+      resultMsg = `<br><span class="warn">💧 레벨 하락. (Level ${srsData.level})</span>`;
+    } else {
+      resultMsg = `<br><span class="err">💧 (레벨 0에서 실수)</span>`;
+    }
+    q = (ok > 0 || (current.refQuiz && refOk)) ? 3 : 2; // 부분 정답 3, 완전 오답 2
+  }
+
+  // ⭐️ [Request 1] 수정된 SRS 알고리즘 호출
+  srsUpdateLight(srsData, q); // srsData 객체가 직접 수정됨
+  
+  SRS[srsKey] = srsData;
+  save(KEY_SRS, SRS);
+  elResult.className="p "+cls;
+  elResult.innerHTML = html + resultMsg; // 채점 결과 + 레벨 변경 메시지
+
+  // --- 3. 진행 제어 ---
+  if(current.refQuiz && !refOk){ 
+    // 장절 퀴즈를 틀렸을 때, refView에 ??? 대신 정답을 표시
+    document.getElementById("refView").textContent=current.card.ref; 
+  }
+
+  if (fullCorrect && q >= 4) { // 마스터한 경우 (q=4 또는 5)
+    setTimeout(nextCard, 1000);
+  } else if (fullCorrect && q < 4) { // 레벨업 한 경우 (q=3)
+    setTimeout(nextCard, 800);
+  } else {
+    // 오답 시 (q=2 또는 3)
+    elNextBtn.classList.remove("hidden");
+    setTimeout(() => {
+      waitingNext = true; 
+    }, 0);
+  }
+}
+
+/* ===== 이벤트/핫키 ===== */
+function msg(el, html, cls=""){ el.className="p "+(cls||""); el.innerHTML=html; }
+
+document.getElementById("startBtn").onclick=startStudy;
+document.getElementById("stopBtn").onclick=stopStudy;
+document.getElementById("listBtn").onclick=()=>{ 
+  show(elList); 
+  const el=document.getElementById("cardList"); 
+  el.innerHTML=""; 
+  // ⭐️ 카드 목록에 레벨과 복습일 표시
+  CARDS.forEach((c,i)=>{ 
+    const st=STATS[c.ref]||{seen:0,correct:0,wrong:0}; 
+    const sr=SRS[c.ref]||{level:0, due: 'N/A'};
+    const div=document.createElement("div"); 
+    div.className="p"; 
+    div.innerHTML=`<strong>${i+1}. ${c.ref}</strong> 
+      <small class="muted">Lvl:${sr.level||0} | Due:${sr.due||'N/A'} | seen:${st.seen||0} / ok:${st.correct||0} / ng:${st.wrong||0}</small>
+      <br>${c.text}`; 
+    el.appendChild(div); 
+  }); 
+};
+document.getElementById("exportBtn").onclick=()=>{ const blob=new Blob([JSON.stringify({cards:CARDS,srs:SRS,stats:STATS},null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="bct-backup.json"; a.click(); };
+document.getElementById("resetBtn").onclick=()=>{ if(!confirm("모든 데이터(cards/srs/stats)를 초기화할까요?")) return; localStorage.removeItem(KEY_CARDS); localStorage.removeItem(KEY_SRS); localStorage.removeItem(KEY_STATS); CARDS=defaultCards(); save(KEY_CARDS,CARDS); SRS={}; STATS={}; updateHeader(); alert("초기화 완료"); };
+
+document.getElementById("submitBtn").onclick=gradeTyping;
+document.getElementById("nextBtn").onclick=advanceNext;
+document.getElementById("hintFirst").onclick=()=>{ hintUsed=true; const t=current.answers.map(a=>a[0]+"_".repeat(Math.max(0,a.length-1))).join(" | "); msg(elResult,"힌트(첫글자): "+t,"muted"); };
+document.getElementById("hintLen").onclick=()=>{ hintUsed=true; msg(elResult,"힌트(길이): "+current.answers.map(a=>a.length).join(" | "),"muted"); };
+document.getElementById("hintReveal").onclick=()=>{ hintUsed=true; const i=Math.floor(Math.random()*current.answers.length); if(current.inputs[i]) current.inputs[i].value=current.answers[i]; msg(elResult,`부분 공개: ${current.answers.map((a,idx)=> idx===i?a:"_".repeat(a.length)).join(" | ")}`,"muted"); };
+document.getElementById("switchSelf").onclick=()=>{ elModeLabel.textContent="셀프"; document.getElementById("typingArea").classList.add("hidden"); document.getElementById("selfArea").classList.remove("hidden"); const el=document.getElementById("fullAnswer"); el.classList.add("hidden"); elResult.innerHTML=""; };
+document.getElementById("showAnswerQuick").onclick=()=>{ elModeLabel.textContent="셀프"; document.getElementById("typingArea").classList.add("hidden"); document.getElementById("selfArea").classList.remove("hidden"); const el=document.getElementById("fullAnswer"); el.textContent=`[${current.card.ref}] ${current.card.text}`; el.classList.remove("hidden"); };
+document.getElementById("switchTyping").onclick=()=>{ elModeLabel.textContent="타이핑"; document.getElementById("typingArea").classList.remove("hidden"); document.getElementById("selfArea").classList.add("hidden"); elResult.innerHTML=""; };
+document.getElementById("showAnswer").onclick=()=>{ const el=document.getElementById("fullAnswer"); el.textContent=`[${current.card.ref}] ${current.card.text}`; el.classList.remove("hidden"); };
+
+// ⭐️ 셀프 채점도 레벨 시스템과 연동
+document.getElementById("selfSubmit").onclick=()=>{ 
+  const val=parseInt(document.getElementById("selfScore").value||"3",10); 
+  const q=Math.min(5,Math.max(1,val)); 
+  recordStat(current.card.ref, q>=4); 
+  
+  const srsKey = current.card.ref;
+  const srsData = SRS[srsKey] || { level: 0, ef: 2.5, interval: 0, due: today() };
+  if (typeof srsData.level === 'undefined') srsData.level = 0;
+
+  if (q >= 4) { // 4, 5점 (정답)
+    const currentLevel = srsData.level;
+    if (currentLevel < MAX_LEVEL) {
+      srsData.level = currentLevel + 1;
+      srsUpdateLight(srsData, 3); // q=3 (레벨업)
+    } else {
+      srsUpdateLight(srsData, q); // q=4 or 5 (마스터)
+    }
+  } else { // 1, 2, 3점 (오답)
+    if (srsData.level > 0) {
+      srsData.level = srsData.level - 1;
+    }
+    srsUpdateLight(srsData, q < 3 ? 2 : 3); // q=1,2 -> 2 / q=3 -> 3
+  }
+  
+  SRS[srsKey] = srsData;
+  save(KEY_SRS, SRS); 
+  nextCard(); 
+};
+
+document.addEventListener("keydown",(e)=>{
+  // 오답 이후: Enter 누르면 무조건 다음
+  if (waitingNext && e.key==="Enter"){ e.preventDefault(); advanceNext(); return; }
+  // 셀프 모드에서 Enter -> 기록
+  if(e.key==="Enter" && !document.getElementById("selfArea").classList.contains("hidden")){
+    e.preventDefault(); document.getElementById("selfSubmit").click();
+  }
+});
+</script>
+</body>
+</html>
