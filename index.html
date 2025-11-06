@@ -709,6 +709,113 @@ document.addEventListener("keydown",(e)=>{
     e.preventDefault(); document.getElementById("selfSubmit").click();
   }
 });
+</script><script>
+// === Global Hotkeys (work in inputs) + Focus/Caret Preservation ===
+// Keys:
+//   Not typing: H / L / R
+//   Typing in input/textarea/contenteditable: Alt+Shift+H / Alt+Shift+L / Alt+Shift+R
+//   Always available: F1=Hint, F2=Line, F3=Reveal
+// After action: original focus & caret are restored.
+
+(function(){
+  function isTextField(el){
+    if(!el) return false;
+    const tag = el.tagName ? el.tagName.toLowerCase() : "";
+    return tag === "input" || tag === "textarea" || el.isContentEditable;
+  }
+
+  function preserveFocus(){
+    const el = document.activeElement;
+    let sel = null;
+    try {
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) {
+        sel = {start: el.selectionStart, end: el.selectionEnd};
+      }
+    } catch(e){}
+    return {el, sel};
+  }
+
+  function restoreFocus(state){
+    if(!state || !state.el) return;
+    setTimeout(()=>{
+      try{
+        state.el.focus({preventScroll:true});
+        if(state.sel && typeof state.sel.start === "number" && typeof state.sel.end === "number"){
+          state.el.setSelectionRange(state.sel.start, state.sel.end);
+        }
+      }catch(e){}
+    }, 0);
+  }
+
+  function clickById(id){
+    const el = document.getElementById(id);
+    if (el) { el.click(); return true; }
+    return false;
+  }
+
+  function triggerAction(action){
+    // Map actions to concrete button IDs in this app
+    const idMap = { hint: "hintFirst", line: "hintLine", reveal: "hintReveal" };
+    if (clickById(idMap[action])) return true;
+
+    // Fallbacks
+    if (typeof window.doHint === "function" && action==="hint") { window.doHint(); return true; }
+    if (typeof window.doLine === "function" && action==="line") { window.doLine(); return true; }
+    if (typeof window.doReveal === "function" && action==="reveal") { window.doReveal(); return true; }
+
+    // Text search fallback (less reliable)
+    const labelMap = { hint: "H(", line: "L(", reveal: "R(" };
+    const btn = Array.from(document.querySelectorAll("button")).find(b => (b.textContent||"").includes(labelMap[action]));
+    if (btn) { btn.click(); return true; }
+
+    return false;
+  }
+
+  // Keep buttons from stealing focus
+  document.addEventListener("mousedown", (e)=>{
+    const t = e.target;
+    if (t && (t.tagName||"").toLowerCase()==="button"){
+      e.preventDefault();
+      t.click();
+    }
+  }, true);
+
+  document.addEventListener("keydown", (e)=>{
+    const key = (e.key||"").toLowerCase();
+    const typing = isTextField(document.activeElement);
+
+    // Determine desired action
+    let action = null;
+
+    // Function keys: F1/F2/F3 (always on)
+    if (e.key === "F1") action = "hint";
+    else if (e.key === "F2") action = "line";
+    else if (e.key === "F3") action = "reveal";
+
+    // Plain keys when not typing
+    if (!action && !typing){
+      if (key === "h") action = "hint";
+      else if (key === "l") action = "line";
+      else if (key === "r") action = "reveal";
+    }
+
+    // When typing: require Alt+Shift to avoid interfering with input text
+    if (!action && typing && e.altKey && e.shiftKey){
+      if (key === "h") action = "hint";
+      else if (key === "l") action = "line";
+      else if (key === "r") action = "reveal";
+    }
+
+    if (!action) return;
+
+    // Preserve focus/caret and execute
+    const state = preserveFocus();
+    e.preventDefault();
+    e.stopPropagation();
+    triggerAction(action);
+    restoreFocus(state);
+  }, true);
+})();
 </script>
 </body>
 </html>
