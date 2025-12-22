@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>성경 요절 선잇기 매칭 (v1)</title>
+<style>
+:root { --bg: #0f172a; --fg: #e2e8f0; --card-bg: #1e293b; --accent: #3b82f6; --success: #22c55e; --error: #ef4444; --line-width: 3px; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; user-select: none; }
+header { padding: 16px; text-align: center; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; max-width: 1000px; margin: 0 auto; }
+h1 { margin: 0; font-size: 1.2rem; }
+.btn { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+.btn:hover { opacity: 0.9; }
+
+/* 게임 영역 */
+#game-area { position: relative; max-width: 1000px; margin: 20px auto; display: flex; justify-content: space-between; padding: 0 20px; gap: 40px; }
+.column { display: flex; flex-direction: column; gap: 15px; width: 45%; z-index: 2; }
+.item { background: var(--card-bg); padding: 12px 16px; border-radius: 12px; border: 2px solid #334155; cursor: pointer; transition: all 0.2s; position: relative; display: flex; align-items: center; min-height: 48px; }
+.item:hover { border-color: var(--accent); transform: translateY(-2px); }
+.item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); background: #1e3a8a; }
+.item.matched { border-color: var(--success); opacity: 0.6; pointer-events: none; background: #064e3b; }
+.item.shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; border-color: var(--error); }
+
+/* 왼쪽(장절) */
+.col-left .item { justify-content: center; font-weight: bold; font-size: 1.1rem; text-align: center; }
+/* 오른쪽(말씀) */
+.col-right .item { font-size: 0.95rem; line-height: 1.4; color: #cbd5e1; }
+
+/* SVG 선 그리기 레이어 */
+#svg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+line { stroke-width: var(--line-width); stroke-linecap: round; transition: stroke 0.3s; }
+
+@keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
+@media (max-width: 600px) {
+  #game-area { gap: 10px; padding: 0 10px; }
+  .col-left { width: 30%; } .col-right { width: 68%; }
+  .item { padding: 10px; font-size: 0.85rem; }
+  .col-right .item { font-size: 0.8rem; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📖 요절 선잇기</h1>
+  <div>
+    <span id="score">0 / 10</span>
+    <button class="btn" onclick="initGame()" style="margin-left: 10px;">새 게임</button>
+  </div>
+</header>
+
+<div id="game-area">
+  <svg id="svg-layer"></svg>
+  <div class="column col-left" id="list-refs"></div>
+  <div class="column col-right" id="list-texts"></div>
+</div>
+
+<script>
+/* 데이터 (제공해주신 데이터와 동일) */
+const CARDS = [
+  {ref:"민14:9", text:"다만 여호와를 거역하지는 말라 또 그 땅 백성을 두려워하지 말라 그들은 우리의 먹이라 그들의 보호자는 그들에게서 떠났고 여호와는 우리와 함께 하시느니라 그들을 두려워하지 말라 하나"},
+  {ref:"신7:9", text:"그런즉 너는 알라 오직 네 하나님 여호와는 하나님이시요 신실하신 하나님이시라 그를 사랑하고 그의 계명을 지키는 자에게는 천 대까지 그의 언약을 이행하시며 인애를 베푸시되"},
+  {ref:"수1:9", text:"내가 네게 명령한 것이 아니냐 강하고 담대하라 두려워하지 말며 놀라지 말라 네가 어디로 가든지 네 하나님 여호와가 너와 함께 하느니라 하시니라"},
+  {ref:"시8:1", text:"여호와 우리 주여 주의 이름이 온 땅에 어찌 그리 아름다운지요 주의 영광이 하늘을 덮었나이다."},
+  {ref:"시23:1", text:"여호와는 나의 목자시니 내게 부족함이 없으리로다."},
+  {ref:"시25:6", text:"여호와여 주의 긍휼하심과 인자하심이 영원부터 있었사오니 주여 이것들을 기억하옵소서"},
+  {ref:"시34:8", text:"너희는 여호와의 선하심을 맛보아 알지어다 그에게 피하는 자는 복이 있도다."},
+  {ref:"시37:4", text:"또 여호와를 기뻐하라 그가 네 마음의 소원을 네게 이루어 주시리로다"},
+  {ref:"시42:5", text:"내 영혼아 네가 어찌하여 낙심하며 어찌하여 내 속에서 불안해 하는가 너는 하나님께 소망을 두라 그가 나타나 도우심으로 말미암아 내가 여전히 찬송하리로다"},
+  {ref:"시51:10", text:"하나님이여 내 속에 정한 마음을 창조하시고 내 안에 정직한 영을 새롭게 하소서"},
+  {ref:"시91:4", text:"그가 너를 그의 깃으로 덮으시리니 네가 그의 날개 아래에 피하리로다 그의 진실함은 방패와 손 방패가 되시나니"},
+  {ref:"시133:1", text:"보라 형제가 연합하여 동거함이 어찌 그리 선하고 아름다운고"},
+  {ref:"시136:26", text:"하늘의 하나님께 감사하라 그 인자하심이 영원함이로다"},
+  {ref:"시145:17", text:"여호와께서는 그 모든 행위에 의로우시며 그 모든 일에 은혜로우시도다"},
+  {ref:"잠11:1", text:"속이는 저울은 여호와께서 미워하시나 공평한 추는 그가 기뻐하시느니라"},
+  {ref:"잠25:28", text:"자기의 마음을 제어하지 아니하는 자는 성읍이 무너지고 성벽이 없는 것과 같으니라"},
+  {ref:"마5:8", text:"마음이 청결한 자는 복이 있나니 그들이 하나님을 볼 것임이요."},
+  {ref:"마7:15", text:"거짓 선지자들을 삼가라 양의 옷을 입고 너희에게 나아오나 속에는 노략질하는 이리라"},
+  {ref:"마11:25", text:"그 때에 예수께서 대답하여 이르시되 천지의 주재이신 아버지여 이것을 지혜롭고 슬기 있는 자들에게는 숨기시고 어린 아이들에게는 나타내심을 감사하나이다"},
+  {ref:"마11:29", text:"나는 마음이 온유하고 겸손하니 나의 멍에를 메고 내게 배우라 그리하면 너희 마음이 쉼을 얻으리니"},
+  {ref:"눅6:36", text:"너희 아버지의 자비로우심 같이 너희도 자비로운 자가 되라"},
+  {ref:"요12:24", text:"내가 진실로 진실로 너희에게 이르노니 한 알의 밀이 땅에 떨어져 죽지 아니하면 한 알 그대로 있고 죽으면 많은 열매를 맺느니라"},
+  {ref:"행4:35", text:"사도들의 발 앞에 두매 그들이 각 사람의 필요를 따라 나누어 줌이라"},
+  {ref:"행10:2", text:"그가 경건하여 온 집안과 더불어 하나님을 경외하며 백성을 많이 구제하고 하나님께 항상 기도하더니."},
+  {ref:"롬12:15", text:"즐거워하는 자들과 함께 즐거워하고 우는 자들과 함께 울라"},
+  {ref:"롬12:18", text:"할 수 있거든 너희로서는 모든 사람과 더불어 화목하라"},
+  {ref:"롬14:1", text:"믿음이 연약한 자를 너희가 받되 그의 의견을 비판하지 말라"},
+  {ref:"고전4:2", text:"그리고 맡은 자들에게 구할 것은 충성이니라"},
+  {ref:"고전9:23", text:"내가 복음을 위하여 모든 것을 행함은 복음에 참여하고자 함이라"},
+  {ref:"고전10:31", text:"그런즉 너희가 먹든지 마시든지 무엇을 하든지 다 하나님의 영광을 위하여 하라."},
+  {ref:"고전14:40", text:"모든 것을 품위 있게 하고 질서 있게 하라"},
+  {ref:"고전15:57", text:"우리 주 예수 그리스도로 말미암아 우리에게 승리를 주시는 하나님께 감사하노니"},
+  {ref:"고후1:4", text:"우리의 모든 환난 중에서 우리를 위로하사 우리로 하여금 하나님께 받는 위로로써 모든 환난 중에 있는 자들을 능히 위로하게 하시는 이시로다"},
+  {ref:"엡2:19", text:"그러므로 이제부터 너희는 외인도 아니요 나그네도 아니요 오직 성도들과 동일한 시민이요 하나님의 권속이라"},
+  {ref:"빌1:10", text:"너희로 지극히 선한 것을 분별하며 또 진실하여 허물 없이 그리스도의 날까지 이르고"},
+  {ref:"빌1:18", text:"그러면 무엇이냐 겉치레로 하나 참으로 하나 무슨 방도로 하든지 전파되는 것은 그리스도니 이로써 나는 기뻐하고 또한 기뻐하리라."},
+  {ref:"빌2:3", text:"아무 일에든지 다툼이나 허영으로 하지 말고 오직 겸손한 마음으로 각각 자기보다 남을 낫게 여기고"},
+  {ref:"빌2:8", text:"사람의 모양으로 나타나사 자기를 낮추시고 죽기까지 복종하셨으니 곧 십자가에 죽으심이라"},
+  {ref:"빌4:8", text:"끝으로 형제들아 무엇에든지 참되며 무엇에든지 경건하며 무엇에든지 옳으며 무엇에든지 정결하며 무엇에든지 사랑 받을 만하며 무엇에든지 칭찬 받을 만하며 무슨 덕이 있든지 무슨 기림이 있든지 이것들을 생각하라"},
+  {ref:"빌4:13", text:"내게 능력 주시는 자 안에서 내가 모든 것을 할 수 있느라"},
+  {ref:"골3:13", text:"누가 누구에게 불만이 있거든 서로 용납하여 피차 용서하되 주께서 너희를 용서하신 것 같이 너희도 그리하고"},
+  {ref:"골3:22", text:"종들아 모든 일에 육신의 상전들에게 순종하되 사람을 기쁘게 하는 자와 같이 눈가림만 하지 말고 오직 주를 두려워하여 성실한 마음으로 하라"},
+  {ref:"딤전6:8", text:"우리가 먹을 것과 입을 것이 있은즉 족한 줄로 알 것이니라."},
+  {ref:"딤후4:2", text:"너는 말씀을 전파하라 때를 얻든지 못 얻든지 항상 힘쓰라 범사에 오래 참음과 가르침으로 경책하며 경계하며 권하라"},
+  {ref:"딛2:7", text:"범사에 네 자신이 선한 일의 본을 보이며 교훈에 부패하지 아니함과 단정함과"},
+  {ref:"히10:24-25", text:"서로 돌아보아 사랑과 선행을 격려하며 모이기를 폐하는 어떤 사람들의 습관과 같이 하지 말고 오직 권하여 그 날이 가까움을 볼수록 더욱 그리하자."},
+  {ref:"히13:2", text:"손님 대접하기를 잊지 말라 이로써 부지중에 천사들을 대접한 이들이 있었느니라"},
+  {ref:"히13:8", text:"예수 그리스도는 어제나 오늘이나 영원토록 동일하시니라"},
+  {ref:"약1:5", text:"너희 중에 누구든지 지혜가 부족하거든 모든 사람에게 후히 주시고 꾸짖지 아니하시는 하나님께 구하라 그리하면 주시리라"},
+  {ref:"약1:19", text:"내 사랑하는 형제들아 너희가 알지니 사람마다 듣기는 속히 하고 말하기는 더디 하며 성내기도 더디 하라"},
+  {ref:"벧전1:16", text:"기록되었으되 내가 거룩하니 너희도 거룩할지어다 하셨느니라."},
+  {ref:"벧전2:17", text:"뭇 사람을 공경하며 형제를 사랑하며 하나님을 두려워하며 왕을 존대하라"},
+  {ref:"벧후1:4", text:"이로써 그 보배롭고 지극히 큰 약속을 우리에게 주사 이 약속으로 말미암아 너희가 정욕 때문에 세상에서 썩어질 것을 피하여 신성한 성품에 참여하는 자가 되게 하려 하셨느니라."},
+  {ref:"벧후3:9", text:"주의 약속은 어떤 이들이 더디다고 생각하는 것 같이 더딘 것이 아니라 오직 주께서는 너희를 대하여 오래 참으사 아무도 멸망하지 아니하고 다 회개하기에 이르기를 원하시느니라"},
+  {ref:"요일4:16", text:"하나님이 우리를 사랑하시는 사랑을 우리가 알고 믿었노니 하나님은 사랑이시라 사랑 안에 거하는 자는 하나님 안에 거하고 하나님도 그의 안에 거하시느니라"}
+];
+
+/* 게임 로직 */
+const GAME_SIZE = 10;
+let currentPairs = [];
+let selectedLeft = null;
+let selectedRight = null;
+let matchCount = 0;
+
+const elRefs = document.getElementById("list-refs");
+const elTexts = document.getElementById("list-texts");
+const elSvg = document.getElementById("svg-layer");
+const elScore = document.getElementById("score");
+const elContainer = document.getElementById("game-area");
+
+// 배열 셔플 함수
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+// 텍스트 말줄임 (화면상 너무 길지 않게)
+function truncate(str, n) {
+  return (str.length > n) ? str.substr(0, n-1) + "..." : str;
+}
+
+function initGame() {
+  elRefs.innerHTML = "";
+  elTexts.innerHTML = "";
+  elSvg.innerHTML = "";
+  currentPairs = [];
+  selectedLeft = null;
+  selectedRight = null;
+  matchCount = 0;
+  elScore.textContent = `0 / ${GAME_SIZE}`;
+
+  // 전체 카드 중 랜덤 10개 선택
+  const pool = [...CARDS];
+  shuffle(pool);
+  currentPairs = pool.slice(0, GAME_SIZE);
+
+  // 왼쪽(장절), 오른쪽(말씀) 데이터 준비
+  const leftItems = currentPairs.map(c => ({ id: c.ref, text: c.ref }));
+  const rightItems = currentPairs.map(c => ({ id: c.ref, text: c.text }));
+
+  // 오른쪽은 순서를 섞음
+  shuffle(rightItems);
+
+  // DOM 생성
+  leftItems.forEach(item => createItem(item, 'left'));
+  rightItems.forEach(item => createItem(item, 'right'));
+}
+
+function createItem(data, side) {
+  const div = document.createElement("div");
+  div.className = "item";
+  div.dataset.id = data.id;
+  div.dataset.side = side;
+  
+  // 오른쪽(말씀)은 너무 길면 적당히 자르고, 툴팁으로 전체 표시
+  if (side === 'right') {
+    div.textContent = truncate(data.text, 50);
+    div.title = data.text; 
+  } else {
+    div.textContent = data.text;
+  }
+
+  div.onclick = () => handleSelect(div, side);
+  
+  if (side === 'left') elRefs.appendChild(div);
+  else elTexts.appendChild(div);
+}
+
+function handleSelect(el, side) {
+  if (el.classList.contains("matched")) return;
+
+  // 같은 쪽을 다시 클릭하면 선택 취소/변경
+  if (side === 'left') {
+    if (selectedLeft) selectedLeft.classList.remove("selected");
+    selectedLeft = el;
+    el.classList.add("selected");
+  } else {
+    if (selectedRight) selectedRight.classList.remove("selected");
+    selectedRight = el;
+    el.classList.add("selected");
+  }
+
+  // 양쪽이 다 선택되었으면 정답 체크
+  if (selectedLeft && selectedRight) {
+    checkMatch();
+  }
+}
+
+function checkMatch() {
+  const idLeft = selectedLeft.dataset.id;
+  const idRight = selectedRight.dataset.id;
+  const isMatch = (idLeft === idRight);
+
+  if (isMatch) {
+    // 정답 처리
+    drawSuccessLine(selectedLeft, selectedRight);
+    selectedLeft.classList.add("matched");
+    selectedRight.classList.add("matched");
+    selectedLeft.classList.remove("selected");
+    selectedRight.classList.remove("selected");
+    
+    selectedLeft = null;
+    selectedRight = null;
+    matchCount++;
+    elScore.textContent = `${matchCount} / ${GAME_SIZE}`;
+
+    if (matchCount === GAME_SIZE) {
+      setTimeout(() => alert("🎉 모든 구절을 연결했습니다!"), 300);
+    }
+  } else {
+    // 오답 처리
+    const l = selectedLeft, r = selectedRight;
+    l.classList.add("shake"); r.classList.add("shake");
+    drawTempLine(l, r, "#ef4444"); // 빨간선 잠시 표시
+
+    setTimeout(() => {
+      l.classList.remove("shake", "selected");
+      r.classList.remove("shake", "selected");
+    }, 500);
+
+    selectedLeft = null;
+    selectedRight = null;
+  }
+}
+
+// SVG 선 그리기 유틸리티
+function getCenter(element) {
+  const rect = element.getBoundingClientRect();
+  const containerRect = elContainer.getBoundingClientRect();
+  return {
+    x: rect.left + rect.width / 2 - containerRect.left,
+    y: rect.top + rect.height / 2 - containerRect.top
+  };
+}
+
+function drawLine(el1, el2, color, isTemp = false) {
+  const p1 = getCenter(el1);
+  const p2 = getCenter(el2);
+
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", p1.x);
+  line.setAttribute("y1", p1.y);
+  line.setAttribute("x2", p2.x);
+  line.setAttribute("y2", p2.y);
+  line.setAttribute("stroke", color);
+  
+  elSvg.appendChild(line);
+  
+  // 창 크기 조절 시 선 위치 갱신을 위해 데이터 저장
+  if (!isTemp) {
+    line.dataset.leftId = el1.dataset.id; // 나중에 리사이즈할 때 식별용 (단순구현을 위해 생략 가능하나 완성도 위함)
+  }
+  return line;
+}
+
+function drawSuccessLine(el1, el2) {
+  drawLine(el1, el2, "#22c55e"); // Green
+}
+
+function drawTempLine(el1, el2, color) {
+  const line = drawLine(el1, el2, color, true);
+  setTimeout(() => {
+    if (line && line.parentNode) line.parentNode.removeChild(line);
+  }, 500);
+}
+
+// 창 크기 변경 시 기존 정답 선들 위치 다시 계산
+window.addEventListener("resize", () => {
+  // SVG 초기화 후 매칭된 항목들만 다시 연결
+  elSvg.innerHTML = "";
+  const lefts = Array.from(elRefs.querySelectorAll(".matched"));
+  const rights = Array.from(elTexts.querySelectorAll(".matched"));
+  
+  lefts.forEach(l => {
+    const id = l.dataset.id;
+    const r = rights.find(item => item.dataset.id === id);
+    if (r) drawSuccessLine(l, r);
+  });
+});
+
+// 게임 시작
+initGame();
+</script>
+</body>
+</html>
